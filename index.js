@@ -2,6 +2,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseEnv } from "node:util";
+import { marked } from "marked";
+import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
 
 const env = parseEnv(fs.readFileSync(new URL(".env", import.meta.url), "utf8"));
@@ -145,4 +147,5 @@ if (process.argv.length <= 2) {
 const prompt = process.argv.slice(2).join(" ");
 console.log("PROMPT: " + prompt + "\n");
 const response = await generateResponseOptionallyUsingTools(prompt);
-console.log("\n" + response + "\n");
+marked.use(markedTerminal());
+console.log("\n" + marked.parse(response));

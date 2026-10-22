@@ -6,6 +6,8 @@
 		"slave": "./index.js"
 	},
 	"dependencies": {
+		"marked": "^15.0.12",
+		"marked-terminal": "^7.3.0",
 		"openai": "^7.42.0"
 	}
 }
