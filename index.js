@@ -12,11 +12,15 @@ const client = new OpenAI({
 });
 
 const isOutOfReach = (p) => {
-	if (p.indexOf(".env") != -1 || path.resolve(p).split(path.sep).includes(".git")) {
+	const rel = path.relative(".", p);
+	if (rel.startsWith("..") || path.isAbsolute(rel)) {
 		return true;
 	}
-	const rel = path.relative(".", p);
-	return rel.startsWith("..") || path.isAbsolute(rel);
+	const segs = rel.split(path.sep);
+	if (segs.includes(".env") || segs.includes(".git")) {
+		return true;
+	}
+	return false;
 };
 
 const functions = {
