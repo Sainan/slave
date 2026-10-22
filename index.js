@@ -4,7 +4,7 @@ import path from "node:path";
 import { parseEnv } from "node:util";
 import OpenAI from "openai";
 
-const env = parseEnv(fs.readFileSync(".env", "utf8"));
+const env = parseEnv(fs.readFileSync(new URL(".env", import.meta.url), "utf8"));
 const client = new OpenAI({
 	apiKey: env.OPENAI_API_KEY,
 });
