@@ -13,3 +13,10 @@ Create a file named `.env` in the slave clone directory, with your OpenAI API ke
 ```env
 OPENAI_API_KEY=your_openai_api_key
 ```
+
+## Usage
+
+In any directory:
+```
+slave How do I use the 'slave' command?
+```
