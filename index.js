@@ -10,7 +10,7 @@ const client = new OpenAI({
 });
 
 const isOutOfReach = (p) => {
-	if (p.indexOf(".env") != -1 || p.indexOf(".git") != -1) {
+	if (p.indexOf(".env") != -1 || path.resolve(p).split(path.sep).includes(".git")) {
 		return true;
 	}
 	const rel = path.relative(".", p);
