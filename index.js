@@ -7,6 +7,8 @@ import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
 
+marked.use(markedTerminal());
+
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const env = parseEnv(fs.readFileSync(path.join(configDir, ".env"), "utf8"));
 const client = new OpenAI({
@@ -53,7 +55,6 @@ const functions = {
 };
 
 const tools = [
-	//{ type: "web_search" }, // TODO: Make it a toggle or so?
 	{
 		type: "function",
 		name: "ls",
@@ -118,6 +119,8 @@ const generateResponseOptionallyUsingTools = async (input, previous_response_id)
 		input,
 		tools,
 	});
+	let used_tools = false;
+
 	while (true) {
 		const toolCalls = response.output.filter((item) => item.type === "function_call");
 		if (toolCalls.length == 0) {
@@ -135,15 +138,16 @@ const generateResponseOptionallyUsingTools = async (input, previous_response_id)
 			};
 		});
 
-		// Send the results back so the model can formulate its answer.
 		response = await client.responses.create({
 			model,
 			previous_response_id: response.id,
 			input: outputs,
 			tools,
 		});
+		used_tools = true;
 	}
 
+	response.used_tools = used_tools;
 	return response;
 };
 
@@ -153,6 +157,7 @@ if (process.argv.length <= 2) {
 }
 let i = 2;
 let previous_response_id;
+let web;
 for (; i != process.argv.length; ++i) {
 	if (!process.argv[i].startsWith("-")) {
 		break;
@@ -166,13 +171,23 @@ for (; i != process.argv.length; ++i) {
 			previous_response_id = JSON.parse(fs.readFileSync(path.join(configDir, ".state.json"), "utf8")).previous_response_id;
 		}
 	}
+	else if (process.argv[i] == "-w" || process.argv[i] == "--web") {
+		tools.push({ type: "web_search" });
+		web = true;
+	}
 	else {
 		console.log("Unknown flag: ")
 	}
 }
 const prompt = process.argv.slice(i).join(" ");
-console.log("PROMPT: " + prompt + "\n");
+console.log((previous_response_id ? "FOLLOW-UP" : "PROMPT") + ": " + prompt);
+if (web) {
+	console.log("(web_search enabled)");
+}
+console.log();
 const response = await generateResponseOptionallyUsingTools(prompt, previous_response_id);
 fs.writeFileSync(path.join(configDir, ".state.json"), JSON.stringify({ previous_response_id: response.id }), "utf8");
-marked.use(markedTerminal());
-console.log("\n" + marked.parse(response.output_text).trimEnd() + "\n");
+if (response.used_tools) {
+	console.log();
+}
+console.log(marked.parse(response.output_text).trimEnd() + "\n");

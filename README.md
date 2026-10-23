@@ -23,3 +23,4 @@ slave [flags] [--] How do I use the 'slave' command?
 
 Flags:
 - `-c`, `--cont`, `--continue` — add your previous invokation to the context of this one
+- `-w`, `--web` — allow the model to search the web search
