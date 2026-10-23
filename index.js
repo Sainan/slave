@@ -145,6 +145,9 @@ const functions = {
 		if (!path) {
 			return "You don't have read access to this file";
 		}
+		if (!fs.existsSync(path) || !fs.statSync(path).isFile()) {
+			return "No such file";
+		}
 		return readFileForModel(path);
 	},
 	writeFile: ({ path, data }) => {
