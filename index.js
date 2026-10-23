@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from "node:util";
 import { createInterface } from "node:readline/promises";
+import ignore from "ignore";
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
@@ -35,13 +36,21 @@ const client = new OpenAI({
 	apiKey: env.OPENAI_API_KEY,
 });
 
-const isOutOfReach = (p) => {
+const gitignore = ignore();
+if (fs.existsSync(".gitignore")) {
+	gitignore.add(fs.readFileSync(".gitignore", "utf8").replaceAll("/\n", "\n"));
+}
+
+const isOutOfReach = (p, type) => {
 	const rel = path.relative(".", p);
 	if (rel.startsWith("..") || path.isAbsolute(rel)) {
 		return true;
 	}
 	const segs = rel.split(path.sep);
 	if (segs.includes(".env") || segs.includes(".git")) {
+		return true;
+	}
+	if (type == "write" && rel && gitignore.ignores(rel)) {
 		return true;
 	}
 	return false;
@@ -98,14 +107,14 @@ const functions = {
 		return fs.readFileSync(path, "utf8");
 	},
 	writeFile: ({ path, data }) => {
-		if (isOutOfReach(path)) {
+		if (isOutOfReach(path, "write")) {
 			return "Out of your reach";
 		}
 		fs.writeFileSync(path, data, "utf8");
 		return "OK";
 	},
 	fileFindAndReplace: ({ path, substring, replacement, expectedMatches }) => {
-		if (isOutOfReach(path)) {
+		if (isOutOfReach(path, "write")) {
 			return "Out of your reach";
 		}
 		const arr = fs.readFileSync(path, "utf8").split(substring);

@@ -26,8 +26,11 @@ Single-character flags can be combined, so `slave -cw prompt` is equivalent to `
 
 ## Sandboxing / Security
 
-The model has read/write access to the working directory and any subdirectories of it, except for the `.git` folder and `.env` files.
+The model gets no command prompt access and limited access to your filesystem:
+- Only within the working directory and subdirectories.
+- `.git` folder and `.env` file can't be accessed by the model, tho it knows they exist, if they do.
+- Files that are `.gitignore`d can't be written to.
 
-This means that you should only run `slave` in Git-tracked folders, and be sure that anything you don't want to lose is committed or at least staged so you can always revert any changes made by the model.
-
-No access is given to run any commands on your system, not even to run your tests (because tests are code that the model can change).
+However, these restrictions are only as good as your practices; you should:
+- Only run `slave` in Git-tracked folders and be sure that anything you don't want to lose is committed or at least staged so you can always revert any changes made by the model.
+- Review changes to your code before running anything, including tests.
