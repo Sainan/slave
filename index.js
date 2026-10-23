@@ -57,6 +57,15 @@ const isOutOfReach = (p, type) => {
 	return false;
 };
 
+const readFileForModel = (filePath) => fs.readFileSync(filePath, "utf8").replaceAll("\r\n", "\n");
+const writeFileFromModel = (filePath, data, usesCRLF) => {
+	if (usesCRLF === undefined) {
+		usesCRLF = fs.existsSync(filePath) && fs.readFileSync(filePath, "utf8").includes("\r\n");
+	}
+	const normalized = data.replaceAll("\r\n", "\n");
+	fs.writeFileSync(filePath, usesCRLF ? normalized.replaceAll("\n", "\r\n") : normalized, "utf8");
+};
+
 const functions = {
 	ls: ({ path }) => {
 		path ??= ".";
@@ -94,7 +103,7 @@ const functions = {
 			.filter(file => !isOutOfReach(file));
 		const res = [];
 		for (const file of files) {
-			const matches = fs.readFileSync(file, "utf8").split(substring).length - 1;
+			const matches = readFileForModel(file).split(substring).length - 1;
 			if (matches) {
 				res.push(`${file} has ${matches} match${matches == 1 ? "" : "es"}`);
 			}
@@ -105,25 +114,27 @@ const functions = {
 		if (isOutOfReach(path)) {
 			return "Out of your reach";
 		}
-		return fs.readFileSync(path, "utf8");
+		return readFileForModel(path);
 	},
 	writeFile: ({ path, data }) => {
 		if (isOutOfReach(path, "write")) {
 			return "Out of your reach";
 		}
-		fs.writeFileSync(path, data, "utf8");
+		writeFileFromModel(path, data);
 		return "OK";
 	},
 	fileFindAndReplace: ({ path, substring, replacement, expectedMatches }) => {
 		if (isOutOfReach(path, "write")) {
 			return "Out of your reach";
 		}
-		const arr = fs.readFileSync(path, "utf8").split(substring);
+		const fileContent = fs.readFileSync(path, "utf8");
+		const usesCRLF = fileContent.includes("\r\n");
+		const arr = fileContent.replaceAll("\r\n", "\n").split(substring);
 		const matches = arr.length - 1;
 		if (matches == 0 || (expectedMatches && matches != expectedMatches)) {
 			return `There were ${matches} match${matches == 1 ? "" : "es"}`;
 		}
-		fs.writeFileSync(path, arr.join(replacement), "utf8");
+		writeFileFromModel(path, arr.join(replacement), usesCRLF);
 		return "OK";
 	},
 	system: ({ command }) => {
