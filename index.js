@@ -28,6 +28,7 @@ if (!env.OPENAI_API_KEY) {
 		console.error("An API key is required.");
 		process.exit(1);
 	}
+	console.log();
 
 	fs.writeFileSync(path.join(configDir, ".env"), `OPENAI_API_KEY=${env.OPENAI_API_KEY}`, { encoding: "utf8", mode: 0o600 });
 	fs.chmodSync(path.join(configDir, ".env"), 0o600);
