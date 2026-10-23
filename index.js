@@ -412,7 +412,7 @@ program
 	.description("Vibe coding without the kaboom factor.")
 	.argument("[prompt...]")
 	.option("-c, --continue", "add your previous invocation to the context of this one").option("--cont")
-	.option("--amend", "retry the previous invocation, using the context from before it")
+	.option("-a, --amend", "retry the previous invocation, using the context from before it")
 	.option("-w, --web", "allow the model to search the web")
 	.option("-n, --no-fs", "disable filesystem access").option("--nofs")
 	.option("-s, --sandbox", "allow the model to use a docker container")

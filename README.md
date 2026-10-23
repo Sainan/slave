@@ -21,7 +21,7 @@ cat yap.txt | slave Summarize this text
 
 Options:
 - `-c`, `--cont`, `--continue` — add your previous invocation to the context of this one
-- `--amend` — retry the previous invocation, using the context from before it
+- `-a`, `--amend` — retry the previous invocation, using the context from before it
 - `-w`, `--web` — allow the model to search the web
 - `-n`, `--no-fs`, `--nofs` — disable filesystem access
 - `-s`, `--sandbox` — allow the model to use a docker container
