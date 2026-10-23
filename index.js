@@ -304,8 +304,8 @@ if (options.createProfile) {
 		process.exit(1);
 	}
 	const provider = program.args[0];
-	if (provider != "openai") {
-		console.log(`Unknown provider: ${provider}`);
+	if (provider != "openai" && !provider.startsWith("http://") && !provider.startsWith("https://")) {
+		console.log(`Invalid provider: ${provider}`);
 		process.exit(1);
 	}
 	const isCreate = !(options.createProfile in state.profiles);
@@ -343,7 +343,7 @@ if (!profile) {
 
 let prompt = program.args.join(" ").trim();
 let previous_response_id;
-const overrides = [`${profile.provider}/${profile.model}`];
+const overrides = [profile.provider.startsWith("http") ? `${profile.model} via ${profile.provider}` : `${profile.provider}/${profile.model}`];
 if (options.continue) {
 	if (fs.existsSync(path.join(configDir, ".state.json"))) {
 		previous_response_id = state.previous_response_id;
@@ -379,9 +379,14 @@ console.log(`(${overrides.join(", ")})\n`);
 
 //console.log({ model: profile.model, prompt, previous_response_id });
 
-const client = new OpenAI({
-	apiKey: state.apiKeys.openai,
-});
+const clientOpts = {
+	apiKey: state.apiKeys[profile.provider],
+};
+if (profile.provider != "openai") {
+	clientOpts.baseURL = profile.provider;
+	clientOpts.apiKey ||= "dummy";
+}
+const client = new OpenAI(clientOpts);
 const response = await generateResponseOptionallyUsingTools(client, profile.model, prompt, previous_response_id);
 state.previous_response_id = response.id;
 saveState();
