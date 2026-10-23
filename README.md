@@ -39,6 +39,7 @@ The model gets no command prompt access and limited access to your filesystem:
 - Only within the working directory and subdirectories.
 - `.git` folder and `.env` file can't be accessed by the model, tho it knows they exist, if they do.
 - Files that are `.gitignore`d can't be written to.
+- You can provide a `.slaveignore` for files that the model should not be allowed to read or write. It will still be able to know of their existence.
 
 However, these restrictions are only as good as your practices; you should:
 - Only run `slave` in Git-tracked folders and be sure that anything you don't want to lose is committed or at least staged so you can always revert any changes made by the model.

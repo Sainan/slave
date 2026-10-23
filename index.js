@@ -34,6 +34,10 @@ const saveState = () => {
 	fs.chmodSync(path.join(configDir, ".state.json"), 0o600);
 };
 
+const slaveignore = ignore();
+if (fs.existsSync(".slaveignore")) {
+	slaveignore.add(fs.readFileSync(".slaveignore", "utf8").replaceAll("/\n", "\n"));
+}
 const gitignore = ignore();
 if (fs.existsSync(".gitignore")) {
 	gitignore.add(fs.readFileSync(".gitignore", "utf8").replaceAll("/\n", "\n"));
@@ -47,7 +51,7 @@ const isOutOfReach = (p, type) => {
 	if (segs.includes(".env") || segs.includes(".git")) {
 		return true;
 	}
-	if (type == "write" && rel && gitignore.ignores(rel)) {
+	if (rel && (slaveignore.ignores(rel) || (type == "write" && gitignore.ignores(rel)))) {
 		return true;
 	}
 	return false;
