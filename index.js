@@ -43,7 +43,7 @@ const gitignore = ignore();
 if (fs.existsSync(".gitignore")) {
 	gitignore.add(fs.readFileSync(".gitignore", "utf8").replaceAll("/\n", "\n"));
 }
-const isOutOfReach = (p, type) => {
+const isOutOfReach = (p, accessType) => {
 	const rel = path.relative(".", p);
 	if (rel.startsWith("..") || path.isAbsolute(rel)) {
 		return true;
@@ -52,10 +52,18 @@ const isOutOfReach = (p, type) => {
 	if (segs.includes(".env") || segs.includes(".git")) {
 		return true;
 	}
-	if (rel && (slaveignore.ignores(rel) || (type == "write" && gitignore.ignores(rel)))) {
+	if (rel && (slaveignore.ignores(rel) || (accessType == "write" && gitignore.ignores(rel)))) {
 		return true;
 	}
 	return false;
+};
+
+const fixPath = (path, accessType) => {
+	if (path.startsWith("/")) {
+		path = path.substring(1);
+		path ||= ".";
+	}
+	return isOutOfReach(path, accessType) ? "" : path;
 };
 
 const readFileForModel = (filePath) => fs.readFileSync(filePath, "utf8").replaceAll("\r\n", "\n");
@@ -89,7 +97,8 @@ const ensureSandbox = () => {
 const functions = {
 	ls: ({ path }) => {
 		path ??= ".";
-		if (isOutOfReach(path)) {
+		path = fixPath(path);
+		if (!path) {
 			return "Out of your reach";
 		}
 		let files;
@@ -103,7 +112,8 @@ const functions = {
 	},
 	findFiles: ({ path, substring, recursive }) => {
 		path ??= ".";
-		if (isOutOfReach(path)) {
+		path = fixPath(path);
+		if (!path) {
 			return "Out of your reach";
 		}
 		let files;
@@ -131,20 +141,23 @@ const functions = {
 		return res.join("\n");
 	},
 	readFile: ({ path }) => {
-		if (isOutOfReach(path)) {
+		path = fixPath(path);
+		if (!path) {
 			return "You don't have read access to this file";
 		}
 		return readFileForModel(path);
 	},
 	writeFile: ({ path, data }) => {
-		if (isOutOfReach(path, "write")) {
+		path = fixPath(path, "write");
+		if (!path) {
 			return "You don't have write access to this file";
 		}
 		writeFileFromModel(path, data);
 		return "OK";
 	},
 	fileFindAndReplace: ({ path, substring, replacement, expectedMatches }) => {
-		if (isOutOfReach(path, "write")) {
+		path = fixPath(path, "write");
+		if (!path) {
 			return "You don't have write access to this file";
 		}
 		const fileContent = fs.readFileSync(path, "utf8");
@@ -170,7 +183,8 @@ const functions = {
 		return output;
 	},
 	sandboxCopyIn: ({ hostPath, sbxPath }) => {
-		if (isOutOfReach(hostPath)) {
+		hostPath = fixPath(hostPath);
+		if (!hostPath) {
 			return "You don't have read access to this file";
 		}
 		if (!fs.existsSync(hostPath) || !fs.statSync(hostPath).isFile()) {
@@ -186,7 +200,8 @@ const functions = {
 		}
 	},
 	sandboxCopyOut: ({ sbxPath, hostPath }) => {
-		if (isOutOfReach(hostPath, "write")) {
+		hostPath = fixPath(hostPath, "write");
+		if (!hostPath) {
 			return "You don't have write access to this file";
 		}
 		if (fs.existsSync(hostPath) && !fs.statSync(hostPath).isFile()) {
