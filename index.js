@@ -232,8 +232,8 @@ let tools = [
 	},*/
 ];
 
+let model = "gpt-6-luna";
 const generateResponseOptionallyUsingTools = async (input, previous_response_id) => {
-	const model = "gpt-6-luna";
 	let response = await client.responses.create({
 		model,
 		previous_response_id,
@@ -288,6 +288,20 @@ const markdownToConsoleText = (md) => {
 let i = 2;
 let previous_response_id;
 const overrides = [];
+const setModel = (value) => {
+	if (!value || value.startsWith("-")) {
+		console.error("The --model flag requires a model name.");
+		process.exit(1);
+	}
+	model = value;
+	const existingOverride = overrides.findIndex(override => override.startsWith("model: "));
+	if (existingOverride >= 0) {
+		overrides[existingOverride] = `model: ${model}`;
+	}
+	else {
+		overrides.push(`model: ${model}`);
+	}
+};
 const processFlag = (flag) => {
 	if (flag == "-c" || flag == "--cont" || flag == "--continue") {
 		if (fs.existsSync(path.join(configDir, ".state.json"))) {
@@ -312,6 +326,14 @@ const processFlag = (flag) => {
 };
 for (; i != process.argv.length; ++i) {
 	const argument = process.argv[i];
+	if (argument == "--model") {
+		setModel(process.argv[++i]);
+		continue;
+	}
+	if (argument.startsWith("--model=")) {
+		setModel(argument.slice("--model=".length));
+		continue;
+	}
 	if (!argument.startsWith("-")) {
 		break;
 	}

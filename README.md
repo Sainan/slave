@@ -24,6 +24,7 @@ Flags:
 - `-c`, `--cont`, `--continue` — add your previous invocation to the context of this one
 - `-w`, `--web` — allow the model to search the web
 - `-n`, `--no-fs`, `--nofs` — disables filesystem access so you can just have a non-binding chat with the model
+- `--model <name>` — use the specified OpenAI model instead of the default (`gpt-6-luna`); also accepts `--model=<name>`
 
 Single-character flags can be combined, so `slave -cw prompt` is equivalent to `slave -c -w prompt`.
 
