@@ -292,6 +292,7 @@ program
 	.description("Vibe coding without the kaboom factor.")
 	.argument("[prompt...]")
 	.option("-c, --continue", "add your previous invocation to the context of this one").option("--cont")
+	.option("--amend", "retry the previous invocation, using the context from before it")
 	.option("-w, --web", "allow the model to search the web")
 	.option("-n, --no-fs", "disable filesystem access").option("--nofs")
 	.option("-p, --profile <name>", "profile name", "default")
@@ -348,10 +349,11 @@ if (!profile) {
 let prompt = program.args.join(" ").trim();
 let previous_response_id;
 const overrides = [profile.provider.startsWith("http") ? `${profile.model} via ${profile.provider}` : `${profile.provider}/${profile.model}`];
-if (options.continue) {
-	if (fs.existsSync(path.join(configDir, ".state.json"))) {
-		previous_response_id = state.previous_response_id;
-	}
+if (options.continue || options.cont) {
+	previous_response_id = state.previous_response_id;
+}
+else if (options.amend) {
+	previous_response_id = state.previous_previous_response_id;
 }
 if (options.web) {
 	tools.push({ type: "web_search" });
@@ -392,6 +394,7 @@ if (profile.provider != "openai") {
 }
 const client = new OpenAI(clientOpts);
 const response = await generateResponseOptionallyUsingTools(client, profile.model, prompt, previous_response_id);
+state.previous_previous_response_id = previous_response_id;
 state.previous_response_id = response.id;
 saveState();
 if (response.used_tools) {

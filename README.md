@@ -21,8 +21,9 @@ cat yap.txt | slave Summarize this text
 
 Options:
 - `-c`, `--cont`, `--continue` — add your previous invocation to the context of this one
+- `--amend` — retry the previous invocation, using the context from before it
 - `-w`, `--web` — allow the model to search the web
-- `-n`, `--no-fs`, `--nofs` — disables filesystem access so you can just have a non-binding chat with the model
+- `-n`, `--no-fs`, `--nofs` — disable filesystem access
 - `-p, --profile <name>` — use the specified profile
 
 Single-character flags can be combined, so `slave -cw prompt` is equivalent to `slave -c -w prompt`.
