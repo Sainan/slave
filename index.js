@@ -3,12 +3,34 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from 'node:url';
 import { parseEnv } from "node:util";
+import { createInterface } from "node:readline/promises";
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
-const env = parseEnv(fs.readFileSync(path.join(configDir, ".env"), "utf8"));
+const env = fs.existsSync(path.join(configDir, ".env")) ? parseEnv(fs.readFileSync(path.join(configDir, ".env"), "utf8")) : {};
+if (!env.OPENAI_API_KEY) {
+	if (!process.stdin.isTTY) {
+		console.error(`No OPENAI_API_KEY found. Run this command in a terminal to enter your key, or add it to ${path.join(configDir, ".env")}.`);
+		process.exit(1);
+	}
+
+	const readline = createInterface({ input: process.stdin, output: process.stdout });
+	try {
+		env.OPENAI_API_KEY = (await readline.question("Enter your OpenAI API key: ")).trim();
+	}
+	finally {
+		readline.close();
+	}
+	if (!env.OPENAI_API_KEY) {
+		console.error("An API key is required.");
+		process.exit(1);
+	}
+
+	fs.writeFileSync(path.join(configDir, ".env"), `OPENAI_API_KEY=${env.OPENAI_API_KEY}`, { encoding: "utf8", mode: 0o600 });
+	fs.chmodSync(path.join(configDir, ".env"), 0o600);
+}
 const client = new OpenAI({
 	apiKey: env.OPENAI_API_KEY,
 });
