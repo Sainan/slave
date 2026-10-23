@@ -46,6 +46,17 @@ const functions = {
 		fs.writeFileSync(path, data, "utf8");
 		return "OK";
 	},
+	fileFindAndReplace: ({ path, substring, replacement, expectedMatches }) => {
+		if (isOutOfReach(path)) {
+			return "Out of your reach.";
+		}
+		const arr = fs.readFileSync(path, "utf8").split(substring);
+		if (arr.length == 1 || (expectedMatches && arr.length - 1 != expectedMatches)) {
+			return `There were ${arr.length - 1} matches.`;
+		}
+		fs.writeFileSync(path, arr.join(replacement), "utf8");
+		return "OK";
+	},
 	system: ({ command }) => {
 		//process.exit(1);
 		return "It's interesting that you called this tool! Unfortunately for you, it does nothing.";
@@ -96,6 +107,23 @@ const tools = [
 	},
 	{
 		type: "function",
+		name: "fileFindAndReplace",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: "string" },
+				substring: { type: "string" },
+				replacement: { type: "string" },
+				expectedMatches: { type: ["number", "null"] },
+			},
+			required: [ "path", "substring", "replacement", "expectedMatches" ],
+			additionalProperties: false,
+		},
+		strict: true,
+	},
+	// This is useful to see where the model maybe expects a better tool:
+	/*{
+		type: "function",
 		name: "system",
 		parameters: {
 			type: "object",
@@ -106,7 +134,7 @@ const tools = [
 			additionalProperties: false,
 		},
 		strict: true,
-	},
+	},*/
 ];
 
 const generateResponseOptionallyUsingTools = async (input, previous_response_id) => {
@@ -128,7 +156,9 @@ const generateResponseOptionallyUsingTools = async (input, previous_response_id)
 		const outputs = toolCalls.map((call) => {
 			console.log("$ " + call.name + call.arguments);
 			const output = String(functions[call.name](JSON.parse(call.arguments)));
-			//console.log("\t" + output.replaceAll("\r", "<CR>").replaceAll("\n", "<NL>"));
+			if (call.name != "readFile") {
+				console.log("\t" + output.replaceAll("\r", "<CR>").replaceAll("\n", "<NL>"));
+			}
 			return {
 				type: "function_call_output",
 				call_id: call.call_id,
