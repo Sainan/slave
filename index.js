@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 import { createInterface } from "node:readline/promises";
 import ignore from "ignore";
