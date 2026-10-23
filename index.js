@@ -152,4 +152,4 @@ const prompt = process.argv.slice(2).join(" ");
 console.log("PROMPT: " + prompt + "\n");
 const response = await generateResponseOptionallyUsingTools(prompt);
 marked.use(markedTerminal());
-console.log("\n" + marked.parse(response));
+console.log("\n" + marked.parse(response).trimEnd() + "\n");
