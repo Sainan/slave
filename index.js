@@ -220,137 +220,135 @@ const functions = {
 	}*/
 };
 
-let tools = [
-	{
-		type: "function",
-		name: "ls",
-		description: "Lists files",
-		parameters: {
-			type: "object",
-			properties: {
-				path: { type: ["string", "null"] },
+const tools = [];
+const initTools = (fs, sandbox, web_search) => {
+	if (fs) {
+		tools.push(
+			{
+				type: "function",
+				name: "ls",
+				description: "Lists files",
+				parameters: {
+					type: "object",
+					properties: {
+						path: { type: ["string", "null"] },
+					},
+					required: [ "path" ],
+					additionalProperties: false,
+				},
+				strict: true,
 			},
-			required: [ "path" ],
-			additionalProperties: false,
-		},
-		strict: true,
-	},
-	{
-		type: "function",
-		name: "findFiles",
-		parameters: {
-			type: "object",
-			properties: {
-				path: { type: ["string", "null"] },
-				substring: { type: "string" },
-				recursive: { type: ["boolean", "null"] },
+			{
+				type: "function",
+				name: "findFiles",
+				parameters: {
+					type: "object",
+					properties: {
+						path: { type: ["string", "null"] },
+						substring: { type: "string" },
+						recursive: { type: ["boolean", "null"] },
+					},
+					required: [ "path", "substring", "recursive" ],
+					additionalProperties: false,
+				},
+				strict: true,
 			},
-			required: [ "path", "substring", "recursive" ],
-			additionalProperties: false,
-		},
-		strict: true,
-	},
-	{
-		type: "function",
-		name: "readFile",
-		parameters: {
-			type: "object",
-			properties: {
-				path: { type: "string" },
+			{
+				type: "function",
+				name: "readFile",
+				parameters: {
+					type: "object",
+					properties: {
+						path: { type: "string" },
+					},
+					required: [ "path" ],
+					additionalProperties: false,
+				},
+				strict: true,
 			},
-			required: [ "path" ],
-			additionalProperties: false,
-		},
-		strict: true,
-	},
-	{
-		type: "function",
-		name: "writeFile",
-		parameters: {
-			type: "object",
-			properties: {
-				path: { type: "string" },
-				data: { type: "string" },
+			{
+				type: "function",
+				name: "writeFile",
+				parameters: {
+					type: "object",
+					properties: {
+						path: { type: "string" },
+						data: { type: "string" },
+					},
+					required: [ "path", "data" ],
+					additionalProperties: false,
+				},
+				strict: true,
 			},
-			required: [ "path", "data" ],
-			additionalProperties: false,
-		},
-		strict: true,
-	},
-	{
-		type: "function",
-		name: "fileFindAndReplace",
-		parameters: {
-			type: "object",
-			properties: {
-				path: { type: "string" },
-				substring: { type: "string" },
-				replacement: { type: "string" },
-				expectedMatches: { type: ["number", "null"] },
+			{
+				type: "function",
+				name: "fileFindAndReplace",
+				parameters: {
+					type: "object",
+					properties: {
+						path: { type: "string" },
+						substring: { type: "string" },
+						replacement: { type: "string" },
+						expectedMatches: { type: ["number", "null"] },
+					},
+					required: [ "path", "substring", "replacement", "expectedMatches" ],
+					additionalProperties: false,
+				},
+				strict: true,
 			},
-			required: [ "path", "substring", "replacement", "expectedMatches" ],
-			additionalProperties: false,
-		},
-		strict: true,
-	},
-	{
-		type: "function",
-		name: "sandboxExec",
-		description: "Runs a command without Bash. Note that commands in the sandbox don't access the user's filesystem but you can copy in and out of it.",
-		parameters: {
-			type: "object",
-			properties: {
-				command: { type: "string" },
-				args: { type: "array", items: { type: "string" } },
+		);
+	}
+	if (sandbox) {
+		tools.push(
+			{
+				type: "function",
+				name: "sandboxExec",
+				description: "Runs a command without Bash. Note that commands in the sandbox don't access the user's filesystem but you can copy in and out of it.",
+				parameters: {
+					type: "object",
+					properties: {
+						command: { type: "string" },
+						args: { type: "array", items: { type: "string" } },
+					},
+					required: [ "command", "args" ],
+					additionalProperties: false,
+				},
+				strict: true,
 			},
-			required: [ "command", "args" ],
-			additionalProperties: false,
-		},
-		strict: true,
-	},
-	{
-		type: "function",
-		name: "sandboxCopyIn",
-		parameters: {
-			type: "object",
-			properties: {
-				hostPath: { type: "string" },
-				sbxPath: { type: "string" },
+			{
+				type: "function",
+				name: "sandboxCopyIn",
+				parameters: {
+					type: "object",
+					properties: {
+						hostPath: { type: "string" },
+						sbxPath: { type: "string" },
+					},
+					required: [ "hostPath", "sbxPath" ],
+					additionalProperties: false,
+				},
+				strict: true,
 			},
-			required: [ "hostPath", "sbxPath" ],
-			additionalProperties: false,
-		},
-		strict: true,
-	},
-	{
-		type: "function",
-		name: "sandboxCopyOut",
-		parameters: {
-			type: "object",
-			properties: {
-				sbxPath: { type: "string" },
-				hostPath: { type: "string" },
+			{
+				type: "function",
+				name: "sandboxCopyOut",
+				parameters: {
+					type: "object",
+					properties: {
+						sbxPath: { type: "string" },
+						hostPath: { type: "string" },
+					},
+					required: [ "sbxPath", "hostPath" ],
+					additionalProperties: false,
+				},
+				strict: true,
 			},
-			required: [ "sbxPath", "hostPath" ],
-			additionalProperties: false,
-		},
-		strict: true,
-	},
-	// This is useful to see where the model maybe expects a better tool:
-	/*{
-		type: "function",
-		name: "system",
-		parameters: {
-			type: "object",
-			properties: {
-				command: { type: "string" },
-			},
-			required: [ "command" ],
-			additionalProperties: false,
-		},
-		strict: true,
-	},*/
-];
+		);
+	}
+	if (web_search) {
+		tools.push({ type: "web_search" });
+	}
+};
 
 const generateResponseOptionallyUsingTools = async (client, model, input, previous_response_id) => {
 	let response = await client.responses.create({
@@ -475,12 +473,12 @@ if (options.continue || options.cont) {
 else if (options.amend) {
 	previous_response_id = state.previous_previous_response_id;
 }
+const filesystemEnabled = options.fs !== false && !options.nofs;
+initTools(filesystemEnabled, filesystemEnabled, options.web);
 if (options.web) {
-	tools.push({ type: "web_search" });
 	overrides.push("web search enabled");
 }
-if (options.fs == false || options.nofs) {
-	tools = tools.filter(tool => tool.type != "function");
+if (!filesystemEnabled) {
 	overrides.push("no filesystem access");
 }
 let stdinText = "";
