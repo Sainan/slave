@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 import { createInterface } from "node:readline/promises";
 import ignore from "ignore";
+import { Command } from "commander";
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
@@ -232,8 +233,7 @@ let tools = [
 	},*/
 ];
 
-let model = "gpt-6-luna";
-const generateResponseOptionallyUsingTools = async (input, previous_response_id) => {
+const generateResponseOptionallyUsingTools = async (model, input, previous_response_id) => {
 	let response = await client.responses.create({
 		model,
 		previous_response_id,
@@ -285,71 +285,39 @@ const markdownToConsoleText = (md) => {
 	return text;
 };
 
-let i = 2;
+const program = new Command();
+program
+	.name("slave")
+	.usage("[options] [--] <prompt...>")
+	.description("Vibe coding without the kaboom factor.")
+	.argument("<prompt...>")
+	.option("-c, --continue", "add your previous invocation to the context of this one").option("--cont", "alias for --continue")
+	.option("-w, --web", "allow the model to search the web")
+	.option("-n, --no-fs", "disable filesystem access").option("--nofs", "alias for --no-fs")
+	.option("--model <name>", "use the specified OpenAI model", "gpt-6-luna")
+	.helpOption("-?, --help", "display help")
+	.parse();
+
+const options = program.opts();
+let prompt = program.args.join(" ").trim();
 let previous_response_id;
 const overrides = [];
-const setModel = (value) => {
-	if (!value || value.startsWith("-")) {
-		console.error("The --model flag requires a model name.");
-		process.exit(1);
-	}
-	model = value;
-	const existingOverride = overrides.findIndex(override => override.startsWith("model: "));
-	if (existingOverride >= 0) {
-		overrides[existingOverride] = `model: ${model}`;
-	}
-	else {
-		overrides.push(`model: ${model}`);
-	}
-};
-const processFlag = (flag) => {
-	if (flag == "-c" || flag == "--cont" || flag == "--continue") {
-		if (fs.existsSync(path.join(configDir, ".state.json"))) {
-			previous_response_id = JSON.parse(fs.readFileSync(path.join(configDir, ".state.json"), "utf8")).previous_response_id;
-		}
-	}
-	else if (flag == "-w" || flag == "--web") {
-		if (!overrides.includes("web search enabled")) {
-			tools.push({ type: "web_search" });
-			overrides.push("web search enabled");
-		}
-	}
-	else if (flag == "-n" || flag == "--no-fs" || flag == "--nofs") {
-		if (!overrides.includes("no filesystem access")) {
-			tools = tools.filter(tool => tool.type != "function");
-			overrides.push("no filesystem access");
-		}
-	}
-	else {
-		console.log(`Unknown flag: ${flag}`);
-	}
-};
-for (; i != process.argv.length; ++i) {
-	const argument = process.argv[i];
-	if (argument == "--model") {
-		setModel(process.argv[++i]);
-		continue;
-	}
-	if (argument.startsWith("--model=")) {
-		setModel(argument.slice("--model=".length));
-		continue;
-	}
-	if (!argument.startsWith("-")) {
-		break;
-	}
-	if (argument == "--") {
-		++i;
-		break;
-	}
-	// Short flags can be combined (for example, -cw is equivalent to -c -w).
-	const flags = argument.startsWith("--") || argument.length <= 2
-		? [argument]
-		: [...argument.slice(1)].map((flag) => `-${flag}`);
-	for (const flag of flags) {
-		processFlag(flag);
+if (options.model != "gpt-6-luna") {
+	overrides.push(`${options.model}`);
+}
+if (options.continue) {
+	if (fs.existsSync(path.join(configDir, ".state.json"))) {
+		previous_response_id = JSON.parse(fs.readFileSync(path.join(configDir, ".state.json"), "utf8")).previous_response_id;
 	}
 }
-let prompt = process.argv.slice(i).join(" ").trim();
+if (options.web) {
+	tools.push({ type: "web_search" });
+	overrides.push("web search enabled");
+}
+if (options.fs == false || options.nofs) {
+	tools = tools.filter(tool => tool.type != "function");
+	overrides.push("no filesystem access");
+}
 let stdinText = "";
 if (!process.stdin.isTTY) {
 	const chunks = [];
@@ -372,7 +340,10 @@ if (overrides.length) {
 	console.log(`(${overrides.join(", ")})`);
 }
 console.log();
-const response = await generateResponseOptionallyUsingTools(prompt, previous_response_id);
+
+//console.log({ model: options.model, prompt, previous_response_id });
+
+const response = await generateResponseOptionallyUsingTools(options.model, prompt, previous_response_id);
 fs.writeFileSync(path.join(configDir, ".state.json"), JSON.stringify({ previous_response_id: response.id }), "utf8");
 if (response.used_tools) {
 	console.log();
