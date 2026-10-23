@@ -13,6 +13,11 @@ In any directory:
 slave [flags] [--] How do I use the 'slave' command?
 ```
 
+You can also pipe text in:
+```
+cat yap.txt | slave Summarize this text
+```
+
 Flags:
 - `-c`, `--cont`, `--continue` — add your previous invocation to the context of this one
 - `-w`, `--web` — allow the model to search the web

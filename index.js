@@ -302,8 +302,20 @@ for (; i != process.argv.length; ++i) {
 		processFlag(flag);
 	}
 }
-const prompt = process.argv.slice(i).join(" ");
+let prompt = process.argv.slice(i).join(" ");
+let stdinText = "";
+if (!process.stdin.isTTY) {
+	const chunks = [];
+	for await (const chunk of process.stdin) {
+		chunks.push(chunk);
+	}
+	stdinText = Buffer.concat(chunks).toString("utf8");
+}
 console.log((previous_response_id ? "FOLLOW-UP" : "PROMPT") + ": " + prompt);
+if (stdinText) {
+	console.log("(stdin provided)");
+	prompt = `${stdinText}\n\n${prompt}`;
+}
 if (web) {
 	console.log("(web_search enabled)");
 }
