@@ -59,8 +59,13 @@ const isOutOfReach = (p, type) => {
 
 const readFileForModel = (filePath) => fs.readFileSync(filePath, "utf8").replaceAll("\r\n", "\n");
 const writeFileFromModel = (filePath, data, usesCRLF) => {
-	if (usesCRLF === undefined) {
-		usesCRLF = fs.existsSync(filePath) && fs.readFileSync(filePath, "utf8").includes("\r\n");
+	if (fs.existsSync(filePath)) {
+		if (usesCRLF === undefined) {
+			usesCRLF = fs.readFileSync(filePath, "utf8").includes("\r\n");
+		}
+	}
+	else {
+		fs.mkdirSync(path.dirname(filePath), { recursive: true });
 	}
 	const normalized = data.replaceAll("\r\n", "\n");
 	fs.writeFileSync(filePath, usesCRLF ? normalized.replaceAll("\n", "\r\n") : normalized, "utf8");
