@@ -11,38 +11,33 @@ import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
-const env = fs.existsSync(path.join(configDir, ".env")) ? parseEnv(fs.readFileSync(path.join(configDir, ".env"), "utf8")) : {};
-if (!env.OPENAI_API_KEY) {
-	if (!process.stdin.isTTY) {
-		console.error(`No OPENAI_API_KEY found. Run this command in a terminal to enter your key, or add it to ${path.join(configDir, ".env")}.`);
-		process.exit(1);
+const state = fs.existsSync(path.join(configDir, ".state.json")) ? JSON.parse(fs.readFileSync(path.join(configDir, ".state.json"), "utf8")) : {};
+state.profiles ??= {};
+state.apiKeys ??= {};
+if (!state.apiKeys.openai && fs.existsSync(path.join(configDir, ".env"))) {
+	const env = parseEnv(fs.readFileSync(path.join(configDir, ".env"), "utf8"));
+	if (env.OPENAI_API_KEY) {
+		state.apiKeys.openai = env.OPENAI_API_KEY;
 	}
-
+}
+const promptForApiKey = async (provider) => {
 	const readline = createInterface({ input: process.stdin, output: process.stdout });
 	try {
-		env.OPENAI_API_KEY = (await readline.question("Enter your OpenAI API key: ")).trim();
+		state.apiKeys[provider] = (await readline.question("Enter your API key: ")).trim();
 	}
 	finally {
 		readline.close();
 	}
-	if (!env.OPENAI_API_KEY) {
-		console.error("An API key is required.");
-		process.exit(1);
-	}
-	console.log();
-
-	fs.writeFileSync(path.join(configDir, ".env"), `OPENAI_API_KEY=${env.OPENAI_API_KEY}`, { encoding: "utf8", mode: 0o600 });
-	fs.chmodSync(path.join(configDir, ".env"), 0o600);
-}
-const client = new OpenAI({
-	apiKey: env.OPENAI_API_KEY,
-});
+};
+const saveState = () => {
+	fs.writeFileSync(path.join(configDir, ".state.json"), JSON.stringify(state, null, 2), { encoding: "utf8", mode: 0o600 });
+	fs.chmodSync(path.join(configDir, ".state.json"), 0o600);
+};
 
 const gitignore = ignore();
 if (fs.existsSync(".gitignore")) {
 	gitignore.add(fs.readFileSync(".gitignore", "utf8").replaceAll("/\n", "\n"));
 }
-
 const isOutOfReach = (p, type) => {
 	const rel = path.relative(".", p);
 	if (rel.startsWith("..") || path.isAbsolute(rel)) {
@@ -233,7 +228,7 @@ let tools = [
 	},*/
 ];
 
-const generateResponseOptionallyUsingTools = async (model, input, previous_response_id) => {
+const generateResponseOptionallyUsingTools = async (client, model, input, previous_response_id) => {
 	let response = await client.responses.create({
 		model,
 		previous_response_id,
@@ -280,34 +275,78 @@ marked.use(markedTerminal());
 const markdownToConsoleText = (md) => {
 	const _console_error = console.error; // prevent unintended output about unknown languages, e.g. "```env\ndeez\n```\n"
 	console.error = undefined;
-	const text = marked.parse(md);
+	const text = marked.parse(md).trimEnd() + "\n";
 	console.error = _console_error;
 	return text;
 };
 
+
 const program = new Command();
 program
 	.name("slave")
-	.usage("[options] [--] <prompt...>")
+	.usage("[options] [--] [prompt...]")
 	.description("Vibe coding without the kaboom factor.")
-	.argument("<prompt...>")
-	.option("-c, --continue", "add your previous invocation to the context of this one").option("--cont", "alias for --continue")
+	.argument("[prompt...]")
+	.option("-c, --continue", "add your previous invocation to the context of this one").option("--cont")
 	.option("-w, --web", "allow the model to search the web")
-	.option("-n, --no-fs", "disable filesystem access").option("--nofs", "alias for --no-fs")
-	.option("--model <name>", "use the specified OpenAI model", "gpt-6-luna")
+	.option("-n, --no-fs", "disable filesystem access").option("--nofs")
+	.option("-p, --profile <name>", "profile name", "default")
+	.option("--create-profile <name> <provider> <model>", "create a profile")
+	.option("--delete-profile <name>", "delete a profile") // TODO
+	.option("--update-api-key <provider>", "update an API key") // TODO
 	.helpOption("-?, --help", "display help")
 	.parse();
-
 const options = program.opts();
+
+if (options.createProfile) {
+	if (!program.args[0] || !program.args[1]) {
+		console.log("Syntax: slave --create-profile <name> <provider> <model>");
+		process.exit(1);
+	}
+	const provider = program.args[0];
+	if (provider != "openai") {
+		console.log(`Unknown provider: ${provider}`);
+		process.exit(1);
+	}
+	const isCreate = !(options.createProfile in state.profiles);
+	state.profiles[options.createProfile] = { provider, model: program.args[1] };
+	if (!state.apiKeys[provider]) {
+		await promptForApiKey(provider);
+	}
+	saveState();
+	console.log(`${isCreate ? "Created" : "Updated"} ${options.createProfile} profile.`);
+	process.exit(0);
+}
+if (options.deleteProfile) {
+	delete state.profiles[options.deleteProfile];
+	saveState();
+	console.log(`Deleted ${options.deleteProfile} profile.`);
+	process.exit(0);
+}
+if (options.updateApiKey) {
+	await promptForApiKey(options.updateApiKey);
+	saveState();
+	console.log("Saved.");
+	process.exit(0);
+}
+
+const profile = state.profiles[options.profile];
+if (!profile) {
+	if (options.profile == "default") {
+		console.log(markdownToConsoleText("You did not specify a profile, but a default profile does not exist. Use e.g. `slave --create-profile default openai gpt-6-luna` to create one."));
+	}
+	else {
+		console.log(markdownToConsoleText(`No such profile. Use e.g. \`slave --create-profile ${options.profile} openai gpt-6-luna\` to create it.`));
+	}
+	process.exit(1);
+}
+
 let prompt = program.args.join(" ").trim();
 let previous_response_id;
-const overrides = [];
-if (options.model != "gpt-6-luna") {
-	overrides.push(`${options.model}`);
-}
+const overrides = [`${profile.provider}/${profile.model}`];
 if (options.continue) {
 	if (fs.existsSync(path.join(configDir, ".state.json"))) {
-		previous_response_id = JSON.parse(fs.readFileSync(path.join(configDir, ".state.json"), "utf8")).previous_response_id;
+		previous_response_id = state.previous_response_id;
 	}
 }
 if (options.web) {
@@ -327,7 +366,7 @@ if (!process.stdin.isTTY) {
 	stdinText = Buffer.concat(chunks).toString("utf8");
 }
 if (!prompt) {
-	console.log("Syntax: slave [flags] [--] <prompt>");
+	console.log("No prompt given.");
 	process.exit(1);
 }
 
@@ -336,16 +375,17 @@ if (stdinText) {
 	overrides.push("stdin provided");
 	prompt = `${stdinText}\n\n${prompt}`;
 }
-if (overrides.length) {
-	console.log(`(${overrides.join(", ")})`);
-}
-console.log();
+console.log(`(${overrides.join(", ")})\n`);
 
-//console.log({ model: options.model, prompt, previous_response_id });
+//console.log({ model: profile.model, prompt, previous_response_id });
 
-const response = await generateResponseOptionallyUsingTools(options.model, prompt, previous_response_id);
-fs.writeFileSync(path.join(configDir, ".state.json"), JSON.stringify({ previous_response_id: response.id }), "utf8");
+const client = new OpenAI({
+	apiKey: state.apiKeys.openai,
+});
+const response = await generateResponseOptionallyUsingTools(client, profile.model, prompt, previous_response_id);
+state.previous_response_id = response.id;
+saveState();
 if (response.used_tools) {
 	console.log();
 }
-console.log(markdownToConsoleText(response.output_text).trimEnd() + "\n");
+console.log(markdownToConsoleText(response.output_text) + "\n");
