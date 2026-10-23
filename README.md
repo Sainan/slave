@@ -21,6 +21,7 @@ cat yap.txt | slave Summarize this text
 Flags:
 - `-c`, `--cont`, `--continue` — add your previous invocation to the context of this one
 - `-w`, `--web` — allow the model to search the web
+- `-n`, `--no-fs`, `--nofs` — disables filesystem access so you can just have a non-binding chat with the model
 
 Single-character flags can be combined, so `slave -cw prompt` is equivalent to `slave -c -w prompt`.
 

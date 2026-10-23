@@ -131,7 +131,7 @@ const functions = {
 	},
 };
 
-const tools = [
+let tools = [
 	{
 		type: "function",
 		name: "ls",
@@ -273,13 +273,9 @@ const markdownToConsoleText = (md) => {
 	return text;
 };
 
-if (process.argv.length <= 2) {
-	console.log("Syntax: slave <prompt>");
-	process.exit(1);
-}
 let i = 2;
 let previous_response_id;
-let web;
+const overrides = [];
 const processFlag = (flag) => {
 	if (flag == "-c" || flag == "--cont" || flag == "--continue") {
 		if (fs.existsSync(path.join(configDir, ".state.json"))) {
@@ -287,8 +283,16 @@ const processFlag = (flag) => {
 		}
 	}
 	else if (flag == "-w" || flag == "--web") {
-		tools.push({ type: "web_search" });
-		web = true;
+		if (!overrides.includes("web search enabled")) {
+			tools.push({ type: "web_search" });
+			overrides.push("web search enabled");
+		}
+	}
+	else if (flag == "-n" || flag == "--no-fs" || flag == "--nofs") {
+		if (!overrides.includes("no filesystem access")) {
+			tools = tools.filter(tool => tool.type != "function");
+			overrides.push("no filesystem access");
+		}
 	}
 	else {
 		console.log(`Unknown flag: ${flag}`);
@@ -311,7 +315,7 @@ for (; i != process.argv.length; ++i) {
 		processFlag(flag);
 	}
 }
-let prompt = process.argv.slice(i).join(" ");
+let prompt = process.argv.slice(i).join(" ").trim();
 let stdinText = "";
 if (!process.stdin.isTTY) {
 	const chunks = [];
@@ -320,13 +324,18 @@ if (!process.stdin.isTTY) {
 	}
 	stdinText = Buffer.concat(chunks).toString("utf8");
 }
+if (!prompt) {
+	console.log("Syntax: slave [flags] [--] <prompt>");
+	process.exit(1);
+}
+
 console.log((previous_response_id ? "FOLLOW-UP" : "PROMPT") + ": " + prompt);
 if (stdinText) {
-	console.log("(stdin provided)");
+	overrides.push("stdin provided");
 	prompt = `${stdinText}\n\n${prompt}`;
 }
-if (web) {
-	console.log("(web_search enabled)");
+if (overrides.length) {
+	console.log(`(${overrides.join(", ")})`);
 }
 console.log();
 const response = await generateResponseOptionallyUsingTools(prompt, previous_response_id);
