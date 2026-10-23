@@ -299,51 +299,53 @@ const initTools = (fs, sandbox, web_search) => {
 		);
 	}
 	if (sandbox) {
-		tools.push(
-			{
-				type: "function",
-				name: "sandboxExec",
-				description: "Runs a command without Bash. Note that commands in the sandbox don't access the user's filesystem but you can copy in and out of it.",
-				parameters: {
-					type: "object",
-					properties: {
-						command: { type: "string" },
-						args: { type: "array", items: { type: "string" } },
-					},
-					required: [ "command", "args" ],
-					additionalProperties: false,
+		tools.push({
+			type: "function",
+			name: "sandboxExec",
+			description: "Runs a command without Bash in an isolated sandbox.",
+			parameters: {
+				type: "object",
+				properties: {
+					command: { type: "string" },
+					args: { type: "array", items: { type: "string" } },
 				},
-				strict: true,
+				required: [ "command", "args" ],
+				additionalProperties: false,
 			},
-			{
-				type: "function",
-				name: "sandboxCopyIn",
-				parameters: {
-					type: "object",
-					properties: {
-						hostPath: { type: "string" },
-						sbxPath: { type: "string" },
+			strict: true,
+		});
+		if (fs) {
+			tools.push(
+				{
+					type: "function",
+					name: "sandboxCopyIn",
+					parameters: {
+						type: "object",
+						properties: {
+							hostPath: { type: "string" },
+							sbxPath: { type: "string" },
+						},
+						required: [ "hostPath", "sbxPath" ],
+						additionalProperties: false,
 					},
-					required: [ "hostPath", "sbxPath" ],
-					additionalProperties: false,
+					strict: true,
 				},
-				strict: true,
-			},
-			{
-				type: "function",
-				name: "sandboxCopyOut",
-				parameters: {
-					type: "object",
-					properties: {
-						sbxPath: { type: "string" },
-						hostPath: { type: "string" },
+				{
+					type: "function",
+					name: "sandboxCopyOut",
+					parameters: {
+						type: "object",
+						properties: {
+							sbxPath: { type: "string" },
+							hostPath: { type: "string" },
+						},
+						required: [ "sbxPath", "hostPath" ],
+						additionalProperties: false,
 					},
-					required: [ "sbxPath", "hostPath" ],
-					additionalProperties: false,
+					strict: true,
 				},
-				strict: true,
-			},
-		);
+			);
+		}
 	}
 	if (web_search) {
 		tools.push({ type: "web_search" });
@@ -413,6 +415,7 @@ program
 	.option("--amend", "retry the previous invocation, using the context from before it")
 	.option("-w, --web", "allow the model to search the web")
 	.option("-n, --no-fs", "disable filesystem access").option("--nofs")
+	.option("-s, --sandbox", "allow the model to use a docker container")
 	.option("-p, --profile <name>", "profile name", "default")
 	.option("--create-profile <name> <provider> <model>", "create a profile")
 	.option("--delete-profile <name>", "delete a profile") // TODO
@@ -474,12 +477,15 @@ else if (options.amend) {
 	previous_response_id = state.previous_previous_response_id;
 }
 const filesystemEnabled = options.fs !== false && !options.nofs;
-initTools(filesystemEnabled, filesystemEnabled, options.web);
+initTools(filesystemEnabled, options.sandbox, options.web);
 if (options.web) {
 	overrides.push("web search enabled");
 }
 if (!filesystemEnabled) {
 	overrides.push("no filesystem access");
+}
+if (options.sandbox) {
+	overrides.push("sandbox enabled");
 }
 let stdinText = "";
 if (!process.stdin.isTTY) {

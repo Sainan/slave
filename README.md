@@ -24,6 +24,7 @@ Options:
 - `--amend` — retry the previous invocation, using the context from before it
 - `-w`, `--web` — allow the model to search the web
 - `-n`, `--no-fs`, `--nofs` — disable filesystem access
+- `-s`, `--sandbox` — allow the model to use a docker container
 - `-p, --profile <name>` — use the specified profile
 
 Single-character flags can be combined, so `slave -cw prompt` is equivalent to `slave -c -w prompt`.
@@ -34,10 +35,10 @@ Subcommands:
 - `--delete-profile <name>` — deletes a profile
 - `--update-api-key <provider>` — updates an API Key
 
-## Sandboxing / Security
+## Security
 
-The model gets no command prompt access and limited access to your filesystem:
-- Only within the working directory and subdirectories.
+The model can't run commands on your system; it only gets limited access to your filesystem:
+- Within the working directory and subdirectories.
 - `.git` folder and `.env` file can't be accessed by the model, tho it knows they exist, if they do.
 - Files that are `.gitignore`d can't be written to.
 - You can provide a `.slaveignore` for files that the model should not be allowed to read or write. It will still be able to know of their existence.
