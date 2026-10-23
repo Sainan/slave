@@ -51,30 +51,67 @@ const functions = {
 	ls: ({ path }) => {
 		path ??= ".";
 		if (isOutOfReach(path)) {
-			return "Out of your reach.";
+			return "Out of your reach";
 		}
-		return JSON.stringify(fs.readdirSync(path, { withFileTypes: true }).map(dirent => dirent.isDirectory() ? `${dirent.name}/` : dirent.name));
+		let files;
+		try {
+			files = fs.readdirSync(path, { withFileTypes: true });
+		}
+		catch (e) {
+			return e.code;
+		}
+		return JSON.stringify(files.map(dirent => dirent.isDirectory() ? `${dirent.name}/` : dirent.name));
+	},
+	findFiles: ({ path, substring, recursive }) => {
+		path ??= ".";
+		if (isOutOfReach(path)) {
+			return "Out of your reach";
+		}
+		let files;
+		try {
+			files = fs.readdirSync(path, { withFileTypes: true, recursive });
+		}
+		catch (e) {
+			return e.code;
+		}
+		files = files.filter(dirent => dirent.isFile())
+			.map(dirent => {
+				if (dirent.parentPath != ".") {
+					return `${dirent.parentPath.replaceAll("\\", "/")}/${dirent.name}`
+				}
+				return dirent.name;
+			})
+			.filter(file => !isOutOfReach(file));
+		const res = [];
+		for (const file of files) {
+			const matches = fs.readFileSync(file, "utf8").split(substring).length - 1;
+			if (matches) {
+				res.push(`${file} has ${matches} match${matches == 1 ? "" : "es"}`);
+			}
+		}
+		return res.join("\n");
 	},
 	readFile: ({ path }) => {
 		if (isOutOfReach(path)) {
-			return "Out of your reach.";
+			return "Out of your reach";
 		}
 		return fs.readFileSync(path, "utf8");
 	},
 	writeFile: ({ path, data }) => {
 		if (isOutOfReach(path)) {
-			return "Out of your reach.";
+			return "Out of your reach";
 		}
 		fs.writeFileSync(path, data, "utf8");
 		return "OK";
 	},
 	fileFindAndReplace: ({ path, substring, replacement, expectedMatches }) => {
 		if (isOutOfReach(path)) {
-			return "Out of your reach.";
+			return "Out of your reach";
 		}
 		const arr = fs.readFileSync(path, "utf8").split(substring);
-		if (arr.length == 1 || (expectedMatches && arr.length - 1 != expectedMatches)) {
-			return `There were ${arr.length - 1} matches.`;
+		const matches = arr.length - 1;
+		if (matches == 0 || (expectedMatches && matches != expectedMatches)) {
+			return `There were ${matches} match${matches == 1 ? "" : "es"}`;
 		}
 		fs.writeFileSync(path, arr.join(replacement), "utf8");
 		return "OK";
@@ -89,13 +126,28 @@ const tools = [
 	{
 		type: "function",
 		name: "ls",
-		description: "Lists files.",
+		description: "Lists files",
 		parameters: {
 			type: "object",
 			properties: {
 				path: { type: ["string", "null"] },
 			},
 			required: [ "path" ],
+			additionalProperties: false,
+		},
+		strict: true,
+	},
+	{
+		type: "function",
+		name: "findFiles",
+		parameters: {
+			type: "object",
+			properties: {
+				path: { type: ["string", "null"] },
+				substring: { type: "string" },
+				recursive: { type: ["boolean", "null"] },
+			},
+			required: [ "path", "substring", "recursive" ],
 			additionalProperties: false,
 		},
 		strict: true,
@@ -178,9 +230,11 @@ const generateResponseOptionallyUsingTools = async (input, previous_response_id)
 		const outputs = toolCalls.map((call) => {
 			console.log("$ " + call.name + call.arguments);
 			const output = String(functions[call.name](JSON.parse(call.arguments)));
-			if (call.name != "readFile") {
-				console.log("\t" + output.replaceAll("\r", "<CR>").replaceAll("\n", "<NL>"));
+			let consoleOutput = output.replaceAll("\r", "<CR>").replaceAll("\n", "<NL>");
+			if (call.name == "readFile" && consoleOutput.length > 80) {
+				consoleOutput = consoleOutput.substring(0, 77) + "...";
 			}
+			console.log(consoleOutput);
 			return {
 				type: "function_call_output",
 				call_id: call.call_id,
