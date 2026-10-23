@@ -7,7 +7,7 @@
 	"version": "0.1.1",
 	"type": "module",
 	"bin": {
-		"slave": "./index.js"
+		"slave": "index.js"
 	},
 	"dependencies": {
 		"ignore": "^7.0.13",
