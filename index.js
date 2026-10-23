@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -71,6 +72,20 @@ const writeFileFromModel = (filePath, data, usesCRLF) => {
 	fs.writeFileSync(filePath, usesCRLF ? normalized.replaceAll("\n", "\r\n") : normalized, "utf8");
 };
 
+let used_docker;
+const ensureSandbox = () => {
+	if (!used_docker) {
+		try {
+			// `docker pull ghcr.io/calamity-inc/slave-sandbox` is not needed to get the image, but would be needed to update it.
+			execFileSync("docker", ["run", "-d", "--name", "slave-sandbox", "ghcr.io/calamity-inc/slave-sandbox", "sleep", "infinity"], { encoding: "utf8" });
+		}
+		catch (e) {
+			// container may already exist if it was not cleaned up previously. this is okay-ish.
+		}
+		used_docker = true;
+	}
+};
+
 const functions = {
 	ls: ({ path }) => {
 		path ??= ".";
@@ -117,20 +132,20 @@ const functions = {
 	},
 	readFile: ({ path }) => {
 		if (isOutOfReach(path)) {
-			return "Out of your reach";
+			return "You don't have read access to this file";
 		}
 		return readFileForModel(path);
 	},
 	writeFile: ({ path, data }) => {
 		if (isOutOfReach(path, "write")) {
-			return "Out of your reach";
+			return "You don't have write access to this file";
 		}
 		writeFileFromModel(path, data);
 		return "OK";
 	},
 	fileFindAndReplace: ({ path, substring, replacement, expectedMatches }) => {
 		if (isOutOfReach(path, "write")) {
-			return "Out of your reach";
+			return "You don't have write access to this file";
 		}
 		const fileContent = fs.readFileSync(path, "utf8");
 		const usesCRLF = fileContent.includes("\r\n");
@@ -142,10 +157,49 @@ const functions = {
 		writeFileFromModel(path, arr.join(replacement), usesCRLF);
 		return "OK";
 	},
-	system: ({ command }) => {
+	sandboxExec: ({ command, args }) => {
+		ensureSandbox();
+		const result = spawnSync("docker", [ "exec", "slave-sandbox", command, ...args ], { encoding: "utf8" });
+		const output = (result.stdout ?? "") + (result.stderr ?? "");
+		if (result.error) {
+			return (output || result.error.message).trimEnd();
+		}
+		if (result.status !== 0 && !output) {
+			return `Command exited with status ${result.status}`;
+		}
+		return output;
+	},
+	sandboxCopyIn: ({ hostPath, sbxPath }) => {
+		if (isOutOfReach(hostPath)) {
+			return "You don't have read access to this file";
+		}
+		if (!fs.existsSync(hostPath) || !fs.statSync(hostPath).isFile()) {
+			return "Host path must point to a file";
+		}
+		ensureSandbox();
+		try {
+			execFileSync("docker", ["cp", "-L", hostPath, `slave-sandbox:${sbxPath}`], { encoding: "utf8" });
+			return "OK";
+		}
+		catch (e) {
+			return (e.stdout ?? e.message).trimEnd();
+		}
+	},
+	sandboxCopyOut: ({ sbxPath, hostPath }) => {
+		if (isOutOfReach(hostPath, "write")) {
+			return "You don't have write access to this file";
+		}
+		if (fs.existsSync(hostPath) && !fs.statSync(hostPath).isFile()) {
+			return "Host path must point to a file";
+		}
+		ensureSandbox();
+		execFileSync("docker", ["cp", "-L", `slave-sandbox:${sbxPath}`, hostPath], { encoding: "utf8" });
+		return "OK";
+	},
+	/*system: ({ command }) => {
 		//process.exit(1);
 		return "It's interesting that you called this tool! Unfortunately for you, it does nothing.";
-	},
+	}*/
 };
 
 let tools = [
@@ -217,6 +271,49 @@ let tools = [
 				expectedMatches: { type: ["number", "null"] },
 			},
 			required: [ "path", "substring", "replacement", "expectedMatches" ],
+			additionalProperties: false,
+		},
+		strict: true,
+	},
+	{
+		type: "function",
+		name: "sandboxExec",
+		description: "Runs a command without Bash. Note that commands in the sandbox don't access the user's filesystem but you can copy in and out of it.",
+		parameters: {
+			type: "object",
+			properties: {
+				command: { type: "string" },
+				args: { type: "array", items: { type: "string" } },
+			},
+			required: [ "command", "args" ],
+			additionalProperties: false,
+		},
+		strict: true,
+	},
+	{
+		type: "function",
+		name: "sandboxCopyIn",
+		parameters: {
+			type: "object",
+			properties: {
+				hostPath: { type: "string" },
+				sbxPath: { type: "string" },
+			},
+			required: [ "hostPath", "sbxPath" ],
+			additionalProperties: false,
+		},
+		strict: true,
+	},
+	{
+		type: "function",
+		name: "sandboxCopyOut",
+		parameters: {
+			type: "object",
+			properties: {
+				sbxPath: { type: "string" },
+				hostPath: { type: "string" },
+			},
+			required: [ "sbxPath", "hostPath" ],
 			additionalProperties: false,
 		},
 		strict: true,
@@ -403,6 +500,9 @@ state.previous_previous_response_id = previous_response_id;
 state.previous_response_id = response.id;
 saveState();
 if (response.used_tools) {
+	if (used_docker) {
+		execFileSync("docker", ["rm", "-f", "slave-sandbox"], { encoding: "utf8" });
+	}
 	console.log();
 }
 console.log(markdownToConsoleText(response.output_text) + "\n");
