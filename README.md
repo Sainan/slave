@@ -18,5 +18,8 @@ OPENAI_API_KEY=your_openai_api_key
 
 In any directory:
 ```
-slave How do I use the 'slave' command?
+slave [flags] [--] How do I use the 'slave' command?
 ```
+
+Flags:
+- `-c`, `--cont`, `--continue` — add your previous invokation to the context of this one

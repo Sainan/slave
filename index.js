@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 import fs from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from 'node:url';
 import { parseEnv } from "node:util";
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
 
-const env = parseEnv(fs.readFileSync(new URL(".env", import.meta.url), "utf8"));
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+const env = parseEnv(fs.readFileSync(path.join(configDir, ".env"), "utf8"));
 const client = new OpenAI({
 	apiKey: env.OPENAI_API_KEY,
 });
@@ -108,10 +110,11 @@ const tools = [
 	},
 ];
 
-const generateResponseOptionallyUsingTools = async (input) => {
+const generateResponseOptionallyUsingTools = async (input, previous_response_id) => {
 	const model = "gpt-6-luna";
 	let response = await client.responses.create({
 		model,
+		previous_response_id,
 		input,
 		tools,
 	});
@@ -141,15 +144,35 @@ const generateResponseOptionallyUsingTools = async (input) => {
 		});
 	}
 
-	return response.output_text;
+	return response;
 };
 
 if (process.argv.length <= 2) {
 	console.log("Syntax: slave <prompt>");
 	process.exit(1);
 }
-const prompt = process.argv.slice(2).join(" ");
+let i = 2;
+let previous_response_id;
+for (; i != process.argv.length; ++i) {
+	if (!process.argv[i].startsWith("-")) {
+		break;
+	}
+	if (process.argv[i] == "--") {
+		++i;
+		break;
+	}
+	if (process.argv[i] == "-c" || process.argv[i] == "--cont" || process.argv[i] == "--continue") {
+		if (fs.existsSync(path.join(configDir, ".state.json"))) {
+			previous_response_id = JSON.parse(fs.readFileSync(path.join(configDir, ".state.json"), "utf8")).previous_response_id;
+		}
+	}
+	else {
+		console.log("Unknown flag: ")
+	}
+}
+const prompt = process.argv.slice(i).join(" ");
 console.log("PROMPT: " + prompt + "\n");
-const response = await generateResponseOptionallyUsingTools(prompt);
+const response = await generateResponseOptionallyUsingTools(prompt, previous_response_id);
+fs.writeFileSync(path.join(configDir, ".state.json"), JSON.stringify({ previous_response_id: response.id }), "utf8");
 marked.use(markedTerminal());
-console.log("\n" + marked.parse(response).trimEnd() + "\n");
+console.log("\n" + marked.parse(response.output_text).trimEnd() + "\n");
