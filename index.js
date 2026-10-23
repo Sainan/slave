@@ -165,25 +165,35 @@ if (process.argv.length <= 2) {
 let i = 2;
 let previous_response_id;
 let web;
-for (; i != process.argv.length; ++i) {
-	if (!process.argv[i].startsWith("-")) {
-		break;
-	}
-	if (process.argv[i] == "--") {
-		++i;
-		break;
-	}
-	if (process.argv[i] == "-c" || process.argv[i] == "--cont" || process.argv[i] == "--continue") {
+const processFlag = (flag) => {
+	if (flag == "-c" || flag == "--cont" || flag == "--continue") {
 		if (fs.existsSync(path.join(configDir, ".state.json"))) {
 			previous_response_id = JSON.parse(fs.readFileSync(path.join(configDir, ".state.json"), "utf8")).previous_response_id;
 		}
 	}
-	else if (process.argv[i] == "-w" || process.argv[i] == "--web") {
+	else if (flag == "-w" || flag == "--web") {
 		tools.push({ type: "web_search" });
 		web = true;
 	}
 	else {
-		console.log("Unknown flag: ")
+		console.log(`Unknown flag: ${flag}`);
+	}
+};
+for (; i != process.argv.length; ++i) {
+	const argument = process.argv[i];
+	if (!argument.startsWith("-")) {
+		break;
+	}
+	if (argument == "--") {
+		++i;
+		break;
+	}
+	// Short flags can be combined (for example, -cw is equivalent to -c -w).
+	const flags = argument.startsWith("--") || argument.length <= 2
+		? [argument]
+		: [...argument.slice(1)].map((flag) => `-${flag}`);
+	for (const flag of flags) {
+		processFlag(flag);
 	}
 }
 const prompt = process.argv.slice(i).join(" ");
