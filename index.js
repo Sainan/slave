@@ -7,8 +7,6 @@ import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
 
-marked.use(markedTerminal());
-
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const env = parseEnv(fs.readFileSync(path.join(configDir, ".env"), "utf8"));
 const client = new OpenAI({
@@ -151,6 +149,15 @@ const generateResponseOptionallyUsingTools = async (input, previous_response_id)
 	return response;
 };
 
+marked.use(markedTerminal());
+const markdownToConsoleText = (md) => {
+	const _console_error = console.error; // prevent unintended output about unknown languages, e.g. "```env\ndeez\n```\n"
+	console.error = undefined;
+	const text = marked.parse(md);
+	console.error = _console_error;
+	return text;
+};
+
 if (process.argv.length <= 2) {
 	console.log("Syntax: slave <prompt>");
 	process.exit(1);
@@ -190,4 +197,4 @@ fs.writeFileSync(path.join(configDir, ".state.json"), JSON.stringify({ previous_
 if (response.used_tools) {
 	console.log();
 }
-console.log(marked.parse(response.output_text).trimEnd() + "\n");
+console.log(markdownToConsoleText(response.output_text).trimEnd() + "\n");
