@@ -1,21 +1,29 @@
 #!/usr/bin/env node
+
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEnv } from "node:util";
 import { createInterface } from "node:readline/promises";
-import ignore from "ignore";
+
+import Anthropic from "@anthropic-ai/sdk";
 import { Command } from "commander";
+import ignore from "ignore";
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
+
 
 const configDir = path.dirname(fileURLToPath(import.meta.url));
 const state = fs.existsSync(path.join(configDir, ".state.json")) ? JSON.parse(fs.readFileSync(path.join(configDir, ".state.json"), "utf8")) : {};
 state.profiles ??= {};
 state.apiKeys ??= {};
+state.providerStates ??= {};
+state.previous_response_id = undefined;
+state.previous_previous_response_id = undefined;
 if (!state.apiKeys.openai && fs.existsSync(path.join(configDir, ".env"))) {
+	// convert from pre-0.2.0 format
 	const env = parseEnv(fs.readFileSync(path.join(configDir, ".env"), "utf8"));
 	if (env.OPENAI_API_KEY) {
 		state.apiKeys.openai = env.OPENAI_API_KEY;
@@ -352,33 +360,56 @@ const initTools = (fs, sandbox, web_search) => {
 	}
 };
 
-const generateResponseOptionallyUsingTools = async (client, model, input, previous_response_id) => {
+const toolToAnthropic = (t) => {
+	if (t.type == "function") {
+		return {
+			name: t.name,
+			description: t.description,
+			input_schema: {
+				type: t.parameters.type,
+				properties: t.parameters.properties,
+			}
+		};
+	}
+	else if (t.type == "web_search") {
+		return {
+			type: "web_search_20260318",
+			name: "web_search"
+		};
+	}
+};
+
+const useTool = (name, args, argsStr) => {
+	console.log("$ " + name + argsStr);
+	const output = String(functions[name](args));
+	let consoleOutput = output.replaceAll("\r", "<CR>").replaceAll("\n", "<NL>");
+	if (name == "readFile" && consoleOutput.length > 80) {
+		consoleOutput = consoleOutput.substring(0, 77) + "...";
+	}
+	console.log(consoleOutput);
+	return output;
+};
+
+const openai_generateResponseOptionallyUsingTools = async (client, model, input, state) => {
 	let response = await client.responses.create({
 		model,
-		previous_response_id,
+		previous_response_id: state,
 		input,
 		tools,
 	});
 	let used_tools = false;
 
 	while (true) {
-		const toolCalls = response.output.filter((item) => item.type === "function_call");
+		const toolCalls = response.output.filter((item) => item.type == "function_call");
 		if (toolCalls.length == 0) {
 			break;
 		}
 
 		const outputs = toolCalls.map((call) => {
-			console.log("$ " + call.name + call.arguments);
-			const output = String(functions[call.name](JSON.parse(call.arguments)));
-			let consoleOutput = output.replaceAll("\r", "<CR>").replaceAll("\n", "<NL>");
-			if (call.name == "readFile" && consoleOutput.length > 80) {
-				consoleOutput = consoleOutput.substring(0, 77) + "...";
-			}
-			console.log(consoleOutput);
 			return {
 				type: "function_call_output",
 				call_id: call.call_id,
-				output,
+				output: useTool(call.name, JSON.parse(call.arguments), call.arguments)
 			};
 		});
 
@@ -391,8 +422,59 @@ const generateResponseOptionallyUsingTools = async (client, model, input, previo
 		used_tools = true;
 	}
 
-	response.used_tools = used_tools;
-	return response;
+	return {
+		output_text: response.output_text,
+		state: response.id,
+		used_tools,
+	};
+};
+
+const anthropic_generateResponseOptionallyUsingTools = async (client, model, input, state) => {
+	state = JSON.parse(state || "[]");
+	state.push({ role: "user", content: input });
+	let used_tools = false;
+
+	const anthropicTools = tools.map(t => toolToAnthropic(t));
+
+	let message = await client.messages.create({
+		model,
+		max_tokens: 4096,
+		cache_control: { type: "ephemeral" },
+		messages: state,
+		tools: anthropicTools,
+	});
+	state.push({ role: message.role, content: message.content });
+
+	while (message.stop_reason == "tool_use" || message.stop_reason == "max_tokens" || message.stop_reason == "pause_turn") {
+		const toolCalls = message.content.filter((item) => item.type == "tool_use");
+		if (toolCalls.length) {
+			const outputs = toolCalls.map((call) => {
+				return {
+					type: "tool_result",
+					tool_use_id: call.id,
+					content: useTool(call.name, call.input, JSON.stringify(call.input))
+				};
+			});
+			state.push({ role: "user", content: outputs });
+			used_tools = true;
+		}
+
+		message = await client.messages.create({
+			model,
+			max_tokens: 4096,
+			cache_control: { type: "ephemeral" },
+			messages: state,
+			tools: anthropicTools,
+		});
+		state.push({ role: message.role, content: message.content });
+	}
+
+	//console.log(message);
+	return {
+		output_text: message.content.find((item) => item.type == "text").text,
+		state: JSON.stringify(state),
+		used_tools,
+	};
 };
 
 marked.use(markedTerminal());
@@ -430,7 +512,7 @@ if (options.createProfile) {
 		process.exit(1);
 	}
 	const provider = program.args[0];
-	if (provider != "openai" && !provider.startsWith("http://") && !provider.startsWith("https://")) {
+	if (provider != "openai" && provider != "anthropic" && !provider.startsWith("http://") && !provider.startsWith("https://")) {
 		console.log(`Invalid provider: ${provider}`);
 		process.exit(1);
 	}
@@ -468,13 +550,14 @@ if (!profile) {
 }
 
 let prompt = program.args.join(" ").trim();
-let previous_response_id;
+let previous_provider_state;
 const overrides = [profile.provider.startsWith("http") ? `${profile.model} via ${profile.provider}` : `${profile.provider}/${profile.model}`];
+state.providerStates[profile.provider] ??= {};
 if (options.continue || options.cont) {
-	previous_response_id = state.previous_response_id;
+	previous_provider_state = state.providerStates[profile.provider].previous;
 }
 else if (options.amend) {
-	previous_response_id = state.previous_previous_response_id;
+	previous_provider_state = state.providerStates[profile.provider].previous_previous;
 }
 const filesystemEnabled = options.fs !== false && !options.nofs;
 initTools(filesystemEnabled, options.sandbox, options.web);
@@ -500,26 +583,33 @@ if (!prompt) {
 	process.exit(1);
 }
 
-console.log((previous_response_id ? "FOLLOW-UP" : "PROMPT") + ": " + prompt);
+console.log((previous_provider_state ? "FOLLOW-UP" : "PROMPT") + ": " + prompt);
 if (stdinText) {
 	overrides.push("stdin provided");
 	prompt = `${stdinText}\n\n${prompt}`;
 }
 console.log(`(${overrides.join(", ")})\n`);
 
-//console.log({ model: profile.model, prompt, previous_response_id });
+//console.log({ model: profile.model, prompt, previous_provider_state });
 
 const clientOpts = {
 	apiKey: state.apiKeys[profile.provider],
 };
-if (profile.provider != "openai") {
-	clientOpts.baseURL = profile.provider;
-	clientOpts.apiKey ||= "dummy";
+let response;
+if (profile.provider == "anthropic") {
+	const client = new Anthropic(clientOpts);
+	response = await anthropic_generateResponseOptionallyUsingTools(client, profile.model, prompt, previous_provider_state);
 }
-const client = new OpenAI(clientOpts);
-const response = await generateResponseOptionallyUsingTools(client, profile.model, prompt, previous_response_id);
-state.previous_previous_response_id = previous_response_id;
-state.previous_response_id = response.id;
+else {
+	if (profile.provider != "openai") {
+		clientOpts.baseURL = profile.provider;
+		clientOpts.apiKey ||= "dummy";
+	}
+	const client = new OpenAI(clientOpts);
+	response = await openai_generateResponseOptionallyUsingTools(client, profile.model, prompt, previous_provider_state);
+}
+state.providerStates[profile.provider].previous_previous = previous_provider_state;
+state.providerStates[profile.provider].previous = response.state;
 saveState();
 if (response.used_tools) {
 	if (used_docker) {
