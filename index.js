@@ -588,23 +588,19 @@ if (!filesystemEnabled) {
 if (options.sandbox) {
 	overrides.push("sandbox enabled");
 }
-let stdinText = "";
-if (!process.stdin.isTTY) {
-	const chunks = [];
-	for await (const chunk of process.stdin) {
-		chunks.push(chunk);
-	}
-	stdinText = Buffer.concat(chunks).toString("utf8");
-}
 if (!prompt) {
 	console.log("No prompt given.");
 	process.exit(1);
 }
 
 console.log((previous_provider_state ? "FOLLOW-UP" : "PROMPT") + ": " + prompt);
-if (stdinText) {
+if (!process.stdin.isTTY) {
+	const chunks = [];
+	for await (const chunk of process.stdin) {
+		chunks.push(chunk);
+	}
+	prompt = `${Buffer.concat(chunks).toString("utf8")}\n\n${prompt}`;
 	overrides.push("stdin provided");
-	prompt = `${stdinText}\n\n${prompt}`;
 }
 console.log(`(${overrides.join(", ")})\n`);
 
