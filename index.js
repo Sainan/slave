@@ -3,32 +3,22 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { parseEnv } from "node:util";
 import { createInterface } from "node:readline/promises";
 
 import Anthropic from "@anthropic-ai/sdk";
 import { Command } from "commander";
+import envPaths from "env-paths";
 import ignore from "ignore";
 import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
 
 
-const configDir = path.dirname(fileURLToPath(import.meta.url));
-const state = fs.existsSync(path.join(configDir, ".state.json")) ? JSON.parse(fs.readFileSync(path.join(configDir, ".state.json"), "utf8")) : {};
+const configDir = envPaths("slave").data;
+const state = fs.existsSync(path.join(configDir, "state.json")) ? JSON.parse(fs.readFileSync(path.join(configDir, "state.json"), "utf8")) : {};
 state.profiles ??= {};
 state.apiKeys ??= {};
 state.providerStates ??= {};
-state.previous_response_id = undefined;
-state.previous_previous_response_id = undefined;
-if (!state.apiKeys.openai && fs.existsSync(path.join(configDir, ".env"))) {
-	// convert from pre-0.2.0 format
-	const env = parseEnv(fs.readFileSync(path.join(configDir, ".env"), "utf8"));
-	if (env.OPENAI_API_KEY) {
-		state.apiKeys.openai = env.OPENAI_API_KEY;
-	}
-}
 const promptForApiKey = async (provider) => {
 	const readline = createInterface({ input: process.stdin, output: process.stdout });
 	try {
@@ -39,8 +29,9 @@ const promptForApiKey = async (provider) => {
 	}
 };
 const saveState = () => {
-	fs.writeFileSync(path.join(configDir, ".state.json"), JSON.stringify(state, null, 2), { encoding: "utf8", mode: 0o600 });
-	fs.chmodSync(path.join(configDir, ".state.json"), 0o600);
+	fs.mkdirSync(configDir, { recursive: true });
+	fs.writeFileSync(path.join(configDir, "state.json"), JSON.stringify(state, null, 2), { encoding: "utf8", mode: 0o600 });
+	fs.chmodSync(path.join(configDir, "state.json"), 0o600);
 };
 
 const slaveignore = ignore();
