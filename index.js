@@ -477,6 +477,9 @@ const markdownToConsoleText = (md) => {
 	return text;
 };
 
+const profileToString = (profile) => {
+	return profile.provider.startsWith("http") ? `${profile.model} via ${profile.provider}` : `${profile.provider}/${profile.model}`;
+};
 
 const program = new Command();
 program
@@ -491,8 +494,9 @@ program
 	.option("-s, --sandbox", "allow the model to use a docker container")
 	.option("-p, --profile <name>", "profile name", "default")
 	.option("--create-profile <name> <provider> <model>", "create a profile")
-	.option("--delete-profile <name>", "delete a profile") // TODO
-	.option("--update-api-key <provider>", "update an API key") // TODO
+	.option("--list-profiles", "list all profiles")
+	.option("--delete-profile <name>", "delete a profile")
+	.option("--update-api-key <provider>", "update an API key")
 	.helpOption("-?, --help", "display help")
 	.parse();
 const options = program.opts();
@@ -514,6 +518,16 @@ if (options.createProfile) {
 	}
 	saveState();
 	console.log(`${isCreate ? "Created" : "Updated"} ${options.createProfile} profile.`);
+	process.exit(0);
+}
+if (options.listProfiles) {
+	const names = Object.keys(state.profiles);
+	if (names.length == 0) {
+		console.log("No profiles.");
+	}
+	for (const name of names) {
+		console.log(`${name}: ${profileToString(state.profiles[name])}`);
+	}
 	process.exit(0);
 }
 if (options.deleteProfile) {
@@ -542,7 +556,7 @@ if (!profile) {
 
 let prompt = program.args.join(" ").trim();
 let previous_provider_state;
-const overrides = [profile.provider.startsWith("http") ? `${profile.model} via ${profile.provider}` : `${profile.provider}/${profile.model}`];
+const overrides = [profileToString(profile)];
 state.providerStates[profile.provider] ??= {};
 if (options.continue || options.cont) {
 	previous_provider_state = state.providerStates[profile.provider].previous;
