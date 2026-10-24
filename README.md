@@ -25,7 +25,7 @@ Options:
 - `-w`, `--web` — allow the model to search the web
 - `-n`, `--no-fs`, `--nofs` — disable filesystem access
 - `-s`, `--sandbox` — allow the model to use a docker container
-- `-p, --profile <name>` — use the specified profile
+- `-p`, `--profile` `<name>` — use the specified profile
 
 Single-character flags can be combined, so `slave -cw prompt` is equivalent to `slave -c -w prompt`.
 
