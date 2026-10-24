@@ -370,14 +370,18 @@ const toolToAnthropic = (t) => {
 	}
 };
 
-const useTool = (name, args, argsStr) => {
-	console.log("$ " + name + argsStr);
-	const output = String(functions[name](args));
-	let consoleOutput = output.replaceAll("\r", "<CR>").replaceAll("\n", "<NL>");
-	if (name == "readFile" && consoleOutput.length > 80) {
-		consoleOutput = consoleOutput.substring(0, 77) + "...";
+const printJunk = (line) => {
+	line = line.replaceAll("\r", "<CR>").replaceAll("\n", "<NL>").replaceAll("\t", "    ");
+	if (line.length > 80) {
+		line = line.substring(0, 77) + "...";
 	}
-	console.log(consoleOutput);
+	console.log(line);
+}
+
+const useTool = (name, args, argsStr) => {
+	printJunk("$ " + name + argsStr);
+	const output = String(functions[name](args));
+	printJunk(output);
 	return output;
 };
 
