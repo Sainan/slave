@@ -433,14 +433,14 @@ const anthropic_generateResponseOptionallyUsingTools = async (client, model, inp
 
 	let message = await client.messages.create({
 		model,
-		max_tokens: 4096,
+		max_tokens: 20000,
 		cache_control: { type: "ephemeral" },
 		messages: state,
 		tools: anthropicTools,
 	});
 	state.push({ role: message.role, content: message.content });
 
-	while (message.stop_reason == "tool_use" || message.stop_reason == "max_tokens" || message.stop_reason == "pause_turn") {
+	while (message.stop_reason == "tool_use" || message.stop_reason == "pause_turn") {
 		const toolCalls = message.content.filter((item) => item.type == "tool_use");
 		if (toolCalls.length) {
 			const outputs = toolCalls.map((call) => {
@@ -454,14 +454,23 @@ const anthropic_generateResponseOptionallyUsingTools = async (client, model, inp
 			used_tools = true;
 		}
 
+		/*if (message.stop_reason == "max_tokens" && message.content[message.content.length].type == "thinking") {
+			state.push({ role: "user", content: "Please continue from where you left off." });
+		}*/
+
 		message = await client.messages.create({
 			model,
-			max_tokens: 4096,
+			max_tokens: 20000,
 			cache_control: { type: "ephemeral" },
 			messages: state,
 			tools: anthropicTools,
 		});
 		state.push({ role: message.role, content: message.content });
+	}
+
+	if (message.stop_reason != "end_turn") {
+		console.log(message);
+		throw new Error(`unexpected stop_reason: ${message.stop_reason}`);
 	}
 
 	//console.log(message);
