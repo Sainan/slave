@@ -13,8 +13,8 @@ import { marked } from "marked";
 import { markedTerminal } from "marked-terminal";
 import OpenAI from "openai";
 
+const { data: configDir, log: logDir } = envPaths("slave");
 
-const configDir = envPaths("slave").data;
 const state = fs.existsSync(path.join(configDir, "state.json")) ? JSON.parse(fs.readFileSync(path.join(configDir, "state.json"), "utf8")) : {};
 state.profiles ??= {};
 state.apiKeys ??= {};
@@ -31,7 +31,22 @@ const promptForApiKey = async (provider) => {
 const saveState = () => {
 	fs.mkdirSync(configDir, { recursive: true });
 	fs.writeFileSync(path.join(configDir, "state.json"), JSON.stringify(state, null, 2), { encoding: "utf8", mode: 0o600 });
-	fs.chmodSync(path.join(configDir, "state.json"), 0o600);
+};
+
+let logFh;
+const logWrite = (line) => {
+	if (!logFh) {
+		const now = new Date();
+		const pad = (n) => String(n).padStart(2, '0');
+		const logfileName = `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())}T${pad(now.getUTCHours())}-${pad(now.getUTCMinutes())}-${pad(now.getUTCSeconds())}Z.txt`;
+		fs.mkdirSync(logDir, { recursive: true });
+		logFh = fs.openSync(path.join(logDir, logfileName), "a", 0o600);
+	}
+	fs.writeSync(logFh, line + "\n");
+};
+const logWriteBoth = (line) => {
+	console.log(line);
+	logWrite(line);
 };
 
 const slaveignore = ignore();
@@ -371,6 +386,7 @@ const toolToAnthropic = (t) => {
 };
 
 const printJunk = (line) => {
+	logWrite(line);
 	line = line.replaceAll("\r", "<CR>").replaceAll("\n", "<NL>").replaceAll("\t", "    ");
 	if (line.length > 80) {
 		line = line.substring(0, 77) + "...";
@@ -469,6 +485,7 @@ const anthropic_generateResponseOptionallyUsingTools = async (client, model, inp
 	}
 
 	if (message.stop_reason != "end_turn") {
+		logWrite(`unexpected stop_reason: ${message.stop_reason}\n${JSON.stringify(message, null, 2)}`);
 		console.log(message);
 		throw new Error(`unexpected stop_reason: ${message.stop_reason}`);
 	}
@@ -593,7 +610,7 @@ if (!prompt) {
 	process.exit(1);
 }
 
-console.log((previous_provider_state ? "FOLLOW-UP" : "PROMPT") + ": " + prompt);
+logWriteBoth((previous_provider_state ? "FOLLOW-UP" : "PROMPT") + ": " + prompt);
 if (!process.stdin.isTTY) {
 	const chunks = [];
 	for await (const chunk of process.stdin) {
@@ -602,7 +619,7 @@ if (!process.stdin.isTTY) {
 	prompt = `${Buffer.concat(chunks).toString("utf8")}\n\n${prompt}`;
 	overrides.push("stdin provided");
 }
-console.log(`(${overrides.join(", ")})\n`);
+logWriteBoth(`(${overrides.join(", ")})\n`);
 
 //console.log({ model: profile.model, prompt, previous_provider_state });
 
@@ -629,6 +646,7 @@ if (response.used_tools) {
 	if (used_docker) {
 		execFileSync("docker", ["rm", "-f", "slave-sandbox"], { encoding: "utf8" });
 	}
-	console.log();
+	logWriteBoth("");
 }
 console.log(markdownToConsoleText(response.output_text) + "\n");
+logWrite(response.output_text);
