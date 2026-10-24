@@ -55,3 +55,5 @@ Each invocation that prompts a model creates a log file:
 - Linux: `~/.local/state/slave-nodejs`, or `$XDG_STATE_HOME/slave-nodejs` if `XDG_STATE_HOME` is set
 - macOS: `~/Library/Logs/slave-nodejs`
 - Windows: `%LOCALAPPDATA%\slave-nodejs\Log`
+
+When a new log file is created, any log file older than 30 days is deleted.
